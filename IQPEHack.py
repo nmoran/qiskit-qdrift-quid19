@@ -17,7 +17,7 @@ class IQPEHack(IQPE):
         norm = np.sum(np.abs([x[0] for x in pauli_list]))
         probs = [np.abs(x[0])/norm for x in pauli_list]
 
-        evo_time = -1 * np.pi # this is value hardcoded in iqpe.py
+        evo_time = -2 * np.pi # this is value hardcoded in iqpe.py
         num_steps = np.math.ceil((2 * norm * evo_time) ** 2 / error)
         logger.info(f'Number of steps for qdrift is {num_steps}')
         num_terms = len(pauli_list)

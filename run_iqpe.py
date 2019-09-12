@@ -162,7 +162,7 @@ if __name__ == '__main__':
     else:
         max_workers = opts.processes
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures = []
+            futures_to_algorithms = {}
             for j in range(len(algorithms)):
                 algorithm = algorithms[j]
                 energies[algorithm] = np.empty(steps)
@@ -174,12 +174,13 @@ if __name__ == '__main__':
                                     d,
                                     algorithm
                     )
-                    futures.append(future)
-                for future in concurrent.futures.as_completed(futures):
-                    i, d, energy, hf_energy = future.result()
-                    energies[algorithm][i] = energy
-                    hf_energies[i] = hf_energy
-                    distances[i] = d
+                    futures_to_algorithms[future] = algorithm
+            for future in concurrent.futures.as_completed(futures_to_algorithms):
+                i, d, energy, hf_energy = future.result()
+                algorithm = futures_to_algorithms[future]
+                energies[algorithm][i] = energy
+                hf_energies[i] = hf_energy
+                distances[i] = d
 
     print(' --- complete')
 
@@ -189,14 +190,30 @@ if __name__ == '__main__':
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
-    plt.plot(distances, hf_energies, label='Hartree-Fock', alpha=0.5)
+    plt.plot(distances, hf_energies, label='Hartree-Fock', alpha=0.5, marker='+')
     for algorithm, es in energies.items():
-        plt.plot(distances, es, label=algorithm, alpha=0.5)
+        plt.plot(distances, es, label=algorithm, alpha=0.5, marker='+')
+    plt.xlabel('Interatomic distance')
+    plt.ylabel('Energy')
+    plt.title('H2 Ground State Energy')
+    plt.legend(loc='upper right')
+    filename = 'energies_0.png'
+    i = 0
+    while os.path.exists(f'energies_{i}.png'): i += 1
+    plt.savefig(f'energies_{i}.png')
+
+    # we plot energy difference with reference energy if present
+    if 'exacteigensolver' in energies:
+        plt.figure()
+        plt.plot(distances, hf_energies - energies['exacteigensolver'], label='Hartree-Fock', alpha=0.5, marker='+')
+        for algorithm, es in energies.items():
+            if algorithm != 'exacteigensolver':
+                plt.plot(distances, es - energies['exacteigensolver'], label=algorithm, alpha=0.5, marker='+')
         plt.xlabel('Interatomic distance')
-        plt.ylabel('Energy')
+        plt.ylabel('Energy - Energy ref')
         plt.title('H2 Ground State Energy')
         plt.legend(loc='upper right')
-        filename = 'energies_0.png'
+        filename = 'energy_diffs_0.png'
         i = 0
-        while os.path.exists(f'energies_{i}.png'): i += 1
-        plt.savefig(f'energies_{i}.png')
+        while os.path.exists(f'energy_diffs_{i}.png'): i += 1
+        plt.savefig(f'energy_diffs_{i}.png')
