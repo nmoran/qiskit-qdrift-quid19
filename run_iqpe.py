@@ -131,7 +131,7 @@ if __name__ == '__main__':
     algorithms = ['iqpe_hack']
     if not opts.no_ref:
         algorithms.append('exacteigensolver')
-    if not opts.include_standard_iqpe:
+    if opts.include_standard_iqpe:
         algorithms.append('iqpe')
 
     start = 0.5  # Start distance
