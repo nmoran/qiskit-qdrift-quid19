@@ -17,9 +17,6 @@ import multiprocessing as mp
 import os
 import gc
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 from qiskit import BasicAer
 from qiskit.aqua import QuantumInstance, AquaError
@@ -43,9 +40,7 @@ def garbage_collected(func):
         return result
     return decorated_func
 
-@garbage_collected
 def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1):
-    logging.info(f"Running distance {i} with algorithm {algorithm}...")
     try:
         driver = PySCFDriver(
             atom='{} .0 .0 .0; H .0 .0 {}'.format(first_atom, distance),
@@ -203,7 +198,7 @@ if __name__ == '__main__':
                     )
                     futures_to_algorithms[future] = algorithm
             logging.info(f'Loaded {len(futures_to_algorithms)} tasks and waiting for completion')
-            for future in concurrent.futures.as_completed(futures_to_algorithms):
+            for future in concurrent.futures.as_completed([x for x in futures_to_algorithms]):
                 i, d, energy, hf_energy, energy_error = future.result()
                 algorithm = futures_to_algorithms[future]
                 energies[algorithm][i] = energy
@@ -220,6 +215,10 @@ if __name__ == '__main__':
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
     plt.plot(distances, hf_energies, label='Hartree-Fock', alpha=0.5, marker='+')
     for algorithm, es in energies.items():
         plt.errorbar(distances, es, yerr=energy_stds[algorithm], label=algorithm, alpha=0.5, marker='+')
