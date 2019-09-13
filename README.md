@@ -1,6 +1,7 @@
 # qiskit-qdrift-quid19
 Prototype implementation of qdrift algorithm for quantum chemistry simulation
-from [https://arxiv.org/abs/1811.08017](https://arxiv.org/abs/1811.08017).
+from [https://arxiv.org/abs/1811.08017](https://arxiv.org/abs/1811.08017) undertaken
+as part of the SQUID Hackathon at ETH Zurich in September 2019.
 
 In order to solve the important electronic structure problem, it is important to be
 able to calculate the energy of a given moleucle. One of the ways to do this is
@@ -61,6 +62,9 @@ optional arguments:
 ```
 
 # Results
+During the project, we managed to implement the algorithm and get it producing results. We 
+see good improvement in gate counts for larger molecules, but still require more work getting the 
+energies right.
 
 ![LiHgates](Results/LiH_gates_v_time_jordan_wigner.png) 
 
@@ -70,6 +74,13 @@ We also saw a massive reduction in the case of LiH but less so for H2
 
 We have implemented Iterative Phase Estimation to measure the energy.
 
-# Possible extensions of this project:
+![Energies](Results/H2_energies.png) 
 
-Do some more work on how our code handles the results from the randomized rotations
+The energies are currently quite far off the reference energies and have a large variance.
+They do trend in the right direction so we believe this could be due to constant factors.
+Further work will be required to resolve this.
+
+# Possible extensions of this project:
+- Some more work is required to resolve the inaccuracies in the energy and variance issues
+- Better control over the parameters
+- Contribution of the completed algorithm to the qiskit package
