@@ -1,2 +1,3 @@
 *.png
 *.ipynb
+.DS_Store
