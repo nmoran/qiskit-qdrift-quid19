@@ -13,8 +13,13 @@ We set a standard rotation angle for all the terms in the Hamiltonian, and then 
 
 This method was reported to be able to reduce the gates required to simulate the time evolution by up to 1000x.
 
-We have implemented Iterative Phase Estimation to measure the energy.
+![LiHgates](results/LiH_gates_v_time_jordan_wigner.png) 
 
+We also saw a massive reduction in the case of LiH but less so for H2 
+
+![LiHgates](results/H2_gates_v_time_jordan_wigner.png) 
+
+We have implemented Iterative Phase Estimation to measure the energy.
 
 # Usage of our code
 
@@ -23,3 +28,7 @@ Requirements: Qiskit(0.12)
 To get the gate counts for H2 and LiH, run the files H2_gate_counts.py and LiH_gate_counts.py or edit them for whatever molecule you choose.
 
 To generate the plots of energy for H2, use the run_iqpe.py
+
+# Possible extensions of this project:
+
+Do some more work on how our code handles the results from the randomized rotations
