@@ -7,7 +7,39 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class IQPEHack(IQPE):
+    """
+        Constructor for modified IQPE with qDRIFT (https://arxiv.org/pdf/1811.08017.pdf)
 
+        Args:
+            operator (BaseOperator): the hamiltonian Operator object
+            state_in (InitialState): the InitialState pluggable component representing
+                    the initial quantum state
+            num_time_slices (int): the number of time slices
+            num_iterations (int): the number of iterations
+            expansion_mode (str): the expansion mode (trotter|suzuki)
+            expansion_order (int): the suzuki expansion order
+            shallow_circuit_concat (bool): indicate whether to use shallow (cheap)
+                    mode for circuit concatenation
+        """
+    Custom version of IQPE algorithm based on recent qDRIFT proposal
+
+    """
+
+    """
+    Constructor for the IQPEHack class
+
+    Calls regular IQPE constructor with addition of error value
+
+    Parameters
+    ----------
+    operator: Operator
+        Hamiltonian operator to estimate phase w.r.t
+    state_in: state
+        The starting state
+    num_time_slices:int
+        N
+
+    """
     def __init__(self, operator, state_in, num_time_slices=1, num_iterations=1,
                  expansion_mode='suzuki', expansion_order=2,
                  shallow_circuit_concat=False, error=1.0):
