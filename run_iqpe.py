@@ -130,10 +130,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--processes', type=int, default=1, help='Number of processes to use (default=1)')
     parser.add_argument('-r', '--no-ref', action='store_true', help='Do not calculate reference values using exact eigensolver.')
+    parser.add_argument('-n', '--no-hack', action='store_true', help='Do not attempt to use the modified IQPE.')
     parser.add_argument('-i', '--include-standard-iqpe', action='store_true', help='Include the standard IQPE method.')
     parser.add_argument('-s', '--steps', type=int, default=10, help='Number of distance steps to use between 0.5 and 1.0 (default=10).')
     parser.add_argument('-f', '--first_atom', default='H', help='The first atom (default=H).')
-    parser.add_argument('-e', '--error', default=0.1, help='The error to use for qdrift IQPE (default=0.1).')
+    parser.add_argument('-e', '--error', type=float, default=0.1, help='The error to use for qdrift IQPE (default=0.1).')
     parser.add_argument('-v', '--verbose', action='store_true')
 
     # parse command line args
@@ -145,14 +146,16 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.INFO)
 
 
-    algorithms = ['iqpe_hack']
+    algorithms = []
+    if not opts.no_hack:
+        algorithms.append('iqpe_hack')
     if not opts.no_ref:
         algorithms.append('exacteigensolver')
     if opts.include_standard_iqpe:
         algorithms.append('iqpe')
 
     start = 0.5  # Start distance
-    by    = 0.5  # How much to increase distance by
+    by    = 1.0  # How much to increase distance by
     steps = opts.steps   # Number of steps to increase by
     energies = {}
     energy_stds = {}
