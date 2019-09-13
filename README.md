@@ -28,8 +28,6 @@ precision increasing with iterations (https://arxiv.org/pdf/quant-ph/0610214.pdf
 
 # Usage of our code
 
-The core requires Python >= 3.6 and Qiskit==0.12
-
 ## Estimating gate counts
 To get the gate counts for H2 and LiH, run the files `H2_gate_counts.py` and
 `LiH_gate_counts.py`. These can be edited to find counts for other molecules. 
@@ -64,3 +62,14 @@ optional arguments:
 
 # Results
 
+![LiHgates](Results/LiH_gates_v_time_jordan_wigner.png) 
+
+We also saw a massive reduction in the case of LiH but less so for H2 
+
+![LiHgates](Results/H2_gates_v_time_jordan_wigner.png) 
+
+We have implemented Iterative Phase Estimation to measure the energy.
+
+# Possible extensions of this project:
+
+Do some more work on how our code handles the results from the randomized rotations
