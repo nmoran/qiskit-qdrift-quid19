@@ -45,6 +45,7 @@ def garbage_collected(func):
 
 @garbage_collected
 def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1):
+    logging.info(f"Running distance {i} with algorithm {algorithm}...")
     try:
         driver = PySCFDriver(
             atom='{} .0 .0 .0; H .0 .0 {}'.format(first_atom, distance),
@@ -59,11 +60,13 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
     qubit_mapping = 'parity'
     fer_op = FermionicOperator(h1=molecule.one_body_integrals, h2=molecule.two_body_integrals)
     qubit_op = Z2Symmetries.two_qubit_reduction(to_weighted_pauli_operator(fer_op.mapping(map_type=qubit_mapping, threshold=1e-10)), 2)
+    energy_std = 0.0
 
     if algorithm.lower() == 'exacteigensolver':
         exact_eigensolver = ExactEigensolver(qubit_op, k=1)
         result = exact_eigensolver.run()
         reference_energy = result['energy']
+        energy = result['energy']
     elif algorithm.lower() == 'iqpe':
         num_particles = molecule.num_alpha + molecule.num_beta
         two_qubit_reduction = True
@@ -80,21 +83,28 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         quantum_instance = QuantumInstance(backend)
 
         result = iqpe.run(quantum_instance)
+        energy = result['energy']
     elif algorithm.lower() == 'iqpe_hack':
         num_particles = molecule.num_alpha + molecule.num_beta
         two_qubit_reduction = True
         num_orbitals = qubit_op.num_qubits + (2 if two_qubit_reduction else 0)
 
-        num_time_slices = 2
-        num_iterations = 8
-        state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
-                               num_particles, qubit_mapping, two_qubit_reduction)
-        iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
-                    expansion_mode='trotter', expansion_order=1,
-                        shallow_circuit_concat=True, error=error)
-        backend = BasicAer.get_backend(sim)
-        quantum_instance = QuantumInstance(backend)
-        result = iqpe.run(quantum_instance)
+        num_time_slices = 1
+        num_iterations = 5
+        num_runs = 20
+        energy_samples = np.empty(num_runs)
+        for runs in range(num_runs):
+            state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
+                                num_particles, qubit_mapping, two_qubit_reduction)
+            iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
+                        expansion_mode='trotter', expansion_order=1,
+                            shallow_circuit_concat=True, error=error)
+            backend = BasicAer.get_backend(sim)
+            quantum_instance = QuantumInstance(backend)
+            result = iqpe.run(quantum_instance)
+            energy_samples[runs] = result['energy']
+        energy = np.mean(energy_samples)
+        energy_std = np.std(energy_samples)
     elif algorithm.lower() == 'qpe':
         num_particles = molecule.num_alpha + molecule.num_beta
         two_qubit_reduction = True
@@ -111,9 +121,10 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         quantum_instance = QuantumInstance(backend)
 
         result = qpe.run(quantum_instance)
+        energy = result['energy']
     else:
         raise AquaError('Unrecognized algorithm.')
-    return i, distance, result['energy'] + molecule.nuclear_repulsion_energy, molecule.hf_energy
+    return i, distance, energy + molecule.nuclear_repulsion_energy, molecule.hf_energy, energy_std
 
 
 if __name__ == '__main__':
@@ -146,6 +157,7 @@ if __name__ == '__main__':
     by    = 0.5  # How much to increase distance by
     steps = opts.steps   # Number of steps to increase by
     energies = {}
+    energy_stds = {}
     hf_energies = np.empty(steps)
     distances = np.empty(steps)
 
@@ -156,6 +168,7 @@ if __name__ == '__main__':
         for j in range(len(algorithms)):
             algorithm = algorithms[j]
             energies[algorithm] = np.empty(steps)
+            energy_stds[algorithm] = np.empty(steps)
             for i in range(steps):
                 d = start + i*by/steps
                 result = compute_energy(
@@ -163,11 +176,11 @@ if __name__ == '__main__':
                     d,
                     algorithm,
                     opts.first_atom,
-                    opts.error
-
+                    error=opts.error
                 )
-                i, d, energy, hf_energy = result
+                i, d, energy, hf_energy, energy_error = result
                 energies[algorithm][i] = energy
+                energy_stds[algorithm][i] = energy_error
                 hf_energies[i] = hf_energy
                 distances[i] = d
     else:
@@ -177,6 +190,7 @@ if __name__ == '__main__':
             for j in range(len(algorithms)):
                 algorithm = algorithms[j]
                 energies[algorithm] = np.empty(steps)
+                energy_stds[algorithm] = np.empty(steps)
                 for i in range(steps):
                     d = start + i*by/steps
                     future = executor.submit(
@@ -185,13 +199,15 @@ if __name__ == '__main__':
                                     d,
                                     algorithm,
                                     opts.first_atom,
-                                    opts.error
+                                    error=opts.error
                     )
                     futures_to_algorithms[future] = algorithm
+            logging.info(f'Loaded {len(futures_to_algorithms)} tasks and waiting for completion')
             for future in concurrent.futures.as_completed(futures_to_algorithms):
-                i, d, energy, hf_energy = future.result()
+                i, d, energy, hf_energy, energy_error = future.result()
                 algorithm = futures_to_algorithms[future]
                 energies[algorithm][i] = energy
+                energy_stds[algorithm][i] = energy_error
                 hf_energies[i] = hf_energy
                 distances[i] = d
 
@@ -199,13 +215,14 @@ if __name__ == '__main__':
 
     print('Distances: ', distances)
     print('Energies:', energies)
+    print('Energy Stds:', energy_stds)
     print('Hartree-Fock energies:', hf_energies)
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
     plt.plot(distances, hf_energies, label='Hartree-Fock', alpha=0.5, marker='+')
     for algorithm, es in energies.items():
-        plt.plot(distances, es, label=algorithm, alpha=0.5, marker='+')
+        plt.errorbar(distances, es, yerr=energy_stds[algorithm], label=algorithm, alpha=0.5, marker='+')
     plt.xlabel('Interatomic distance')
     plt.ylabel('Energy')
     plt.title(f'{opts.first_atom}-H Ground State Energy')
