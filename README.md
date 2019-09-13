@@ -18,7 +18,7 @@ We have implemented Iterative Phase Estimation to measure the energy.
 
 # Usage of our code
 
-Requirements: Qiskit(0.9)
+Requirements: Qiskit(0.12)
 
 To get the gate counts for H2 and LiH, run the files H2_gate_counts.py and LiH_gate_counts.py or edit them for whatever molecule you choose.
 
