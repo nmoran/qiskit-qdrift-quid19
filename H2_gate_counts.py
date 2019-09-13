@@ -33,8 +33,8 @@ num_spin_orbitals = molecule.num_orbitals * 2
 h1 = molecule.one_body_integrals
 h2 = molecule.two_body_integrals
 ferOp = FermionicOperator(h1=h1, h2=h2)
-
-qubitOp = ferOp.mapping(map_type='jordan_wigner', threshold=10**-10)
+map_type = 'bravyi_kitaev'
+qubitOp = ferOp.mapping(map_type=map_type, threshold=10**-10)
 qubitOp.chop(10**-10)
 
 num_terms = len(qubitOp.paulis)
@@ -51,7 +51,7 @@ for i in range(len(qubitOp.paulis)):
 
 runs = 10
 print('start of big loop')
-times = np.linspace(.1,10,10)
+times = np.linspace(.1,1,10)
 qdrift_av_counts=[]
 trotter_counts=[]
 #iterate through the list of durations
@@ -122,9 +122,9 @@ for time_idx in range(len(times)):
 
 plt.plot(times,qdrift_av_counts,label='qdrift_avg_counts')
 plt.plot(times,trotter_counts,label = 'trotter_counts')
-plt.title('Gates vs Error for Time Evolution')
+plt.title('Gates v Duration for Time Evol({})'.format(map_type))
 plt.xlabel("Duration of evolution")
 plt.ylabel("Number of Gates")
 plt.legend(loc=0)
 plt.yscale('log')
-plt.savefig("H2_gates_v_time.png", dpi=600)
+plt.savefig("H2_gates_v_time_{}.png".format(map_type), dpi=600)
