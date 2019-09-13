@@ -41,6 +41,9 @@ def garbage_collected(func):
     return decorated_func
 
 def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1):
+    """
+    Compute the ground state energy given a distance, method and params
+    """
     try:
         driver = PySCFDriver(
             atom='{} .0 .0 .0; H .0 .0 {}'.format(first_atom, distance),
@@ -92,8 +95,8 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
             state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                 num_particles, qubit_mapping, two_qubit_reduction)
             iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
-                        expansion_mode='trotter', expansion_order=1,
-                            shallow_circuit_concat=True, error=error)
+                            expansion_mode='trotter', expansion_order=1,
+                            shallow_circuit_concat=False, error=error)
             backend = BasicAer.get_backend(sim)
             quantum_instance = QuantumInstance(backend)
             result = iqpe.run(quantum_instance)
