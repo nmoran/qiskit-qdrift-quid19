@@ -15,6 +15,7 @@ import logging
 import concurrent.futures
 import multiprocessing as mp
 import os
+import gc
 
 import matplotlib
 matplotlib.use('Agg')
@@ -35,10 +36,18 @@ from qiskit.chemistry import set_qiskit_chemistry_logging
 
 from IQPEHack import IQPEHack
 
-def compute_energy(i, distance, algorithm):
+def garbage_collected(func):
+    def decorated_func(*args, **kwargs):
+        result = func(*args, **kwargs)
+        _ = gc.collect()
+        return result
+    return decorated_func
+
+@garbage_collected
+def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator'):
     try:
         driver = PySCFDriver(
-            atom='H .0 .0 .0; H .0 .0 {}'.format(distance),
+            atom='{} .0 .0 .0; H .0 .0 {}'.format(first_atom, distance),
             unit=UnitsType.ANGSTROM,
             charge=0,
             spin=0,
@@ -67,8 +76,7 @@ def compute_energy(i, distance, algorithm):
         iqpe = IQPE(qubit_op, state_in, num_time_slices, num_iterations,
                     expansion_mode='trotter', expansion_order=1,
                     shallow_circuit_concat=True)
-#         backend = BasicAer.get_backend('statevector_simulator')
-        backend = BasicAer.get_backend('qasm_simulator')
+        backend = BasicAer.get_backend(sim)
         quantum_instance = QuantumInstance(backend)
 
         result = iqpe.run(quantum_instance)
@@ -77,15 +85,14 @@ def compute_energy(i, distance, algorithm):
         two_qubit_reduction = True
         num_orbitals = qubit_op.num_qubits + (2 if two_qubit_reduction else 0)
 
-        num_time_slices = 2
+        num_time_slices = 1
         num_iterations = 10
         state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                num_particles, qubit_mapping, two_qubit_reduction)
         iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
                     expansion_mode='trotter', expansion_order=1,
                     shallow_circuit_concat=True)
-#         backend = BasicAer.get_backend('statevector_simulator')
-        backend = BasicAer.get_backend('qasm_simulator')
+        backend = BasicAer.get_backend(sim)
         quantum_instance = QuantumInstance(backend)
         result = iqpe.run(quantum_instance)
     elif algorithm.lower() == 'qpe':
@@ -100,7 +107,7 @@ def compute_energy(i, distance, algorithm):
         qpe = QPE(qubit_op, state_in, iqft, num_time_slices, num_ancillae=4,
                    expansion_mode='trotter', expansion_order=1,
                    shallow_circuit_concat=True)
-        backend = BasicAer.get_backend('statevector_simulator')
+        backend = BasicAer.get_backend(sim)
         quantum_instance = QuantumInstance(backend)
 
         result = qpe.run(quantum_instance)
@@ -117,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--no-ref', action='store_true', help='Do not calculate reference values using exact eigensolver.')
     parser.add_argument('-i', '--include-standard-iqpe', action='store_true', help='Include the standard IQPE method.')
     parser.add_argument('-s', '--steps', type=int, default=10, help='Number of distance steps to use between 0.5 and 1.0 (default=10).')
+    parser.add_argument('-f', '--first_atom', default='H', help='The first atom (default=H).')
     parser.add_argument('-v', '--verbose', action='store_true')
 
     # parse command line args
@@ -153,7 +161,8 @@ if __name__ == '__main__':
                 result = compute_energy(
                     i,
                     d,
-                    algorithm
+                    algorithm,
+                    opts.first_atom
                 )
                 i, d, energy, hf_energy = result
                 energies[algorithm][i] = energy
@@ -172,7 +181,8 @@ if __name__ == '__main__':
                                     compute_energy,
                                     i,
                                     d,
-                                    algorithm
+                                    algorithm,
+                                    opts.first_atom
                     )
                     futures_to_algorithms[future] = algorithm
             for future in concurrent.futures.as_completed(futures_to_algorithms):
@@ -195,7 +205,7 @@ if __name__ == '__main__':
         plt.plot(distances, es, label=algorithm, alpha=0.5, marker='+')
     plt.xlabel('Interatomic distance')
     plt.ylabel('Energy')
-    plt.title('H2 Ground State Energy')
+    plt.title(f'{opts.first_atom}-H Ground State Energy')
     plt.legend(loc='upper right')
     filename = 'energies_0.png'
     i = 0
@@ -211,7 +221,7 @@ if __name__ == '__main__':
                 plt.plot(distances, es - energies['exacteigensolver'], label=algorithm, alpha=0.5, marker='+')
         plt.xlabel('Interatomic distance')
         plt.ylabel('Energy - Energy ref')
-        plt.title('H2 Ground State Energy')
+        plt.title(f'{opts.first_atom}-H Ground State Energy')
         plt.legend(loc='upper right')
         filename = 'energy_diffs_0.png'
         i = 0
