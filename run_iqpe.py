@@ -44,7 +44,7 @@ def garbage_collected(func):
     return decorated_func
 
 @garbage_collected
-def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator'):
+def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1):
     try:
         driver = PySCFDriver(
             atom='{} .0 .0 .0; H .0 .0 {}'.format(first_atom, distance),
@@ -70,7 +70,7 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         num_orbitals = qubit_op.num_qubits + (2 if two_qubit_reduction else 0)
 
         num_time_slices = 2
-        num_iterations = 10
+        num_iterations = 8
         state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                num_particles, qubit_mapping, two_qubit_reduction)
         iqpe = IQPE(qubit_op, state_in, num_time_slices, num_iterations,
@@ -85,13 +85,13 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         two_qubit_reduction = True
         num_orbitals = qubit_op.num_qubits + (2 if two_qubit_reduction else 0)
 
-        num_time_slices = 1
-        num_iterations = 10
+        num_time_slices = 2
+        num_iterations = 8
         state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                num_particles, qubit_mapping, two_qubit_reduction)
         iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
                     expansion_mode='trotter', expansion_order=1,
-                    shallow_circuit_concat=True)
+                        shallow_circuit_concat=True, error=error)
         backend = BasicAer.get_backend(sim)
         quantum_instance = QuantumInstance(backend)
         result = iqpe.run(quantum_instance)
@@ -119,12 +119,12 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
 if __name__ == '__main__':
     # Create parser with args to control behaviour
     parser = argparse.ArgumentParser()
-    parser.add_argument('-e', '--expansion-mode', type=str, default='qdrift', help='Expansion mode to use [trotter, qdrift] (default=qdrift)')
     parser.add_argument('-p', '--processes', type=int, default=1, help='Number of processes to use (default=1)')
     parser.add_argument('-r', '--no-ref', action='store_true', help='Do not calculate reference values using exact eigensolver.')
     parser.add_argument('-i', '--include-standard-iqpe', action='store_true', help='Include the standard IQPE method.')
     parser.add_argument('-s', '--steps', type=int, default=10, help='Number of distance steps to use between 0.5 and 1.0 (default=10).')
     parser.add_argument('-f', '--first_atom', default='H', help='The first atom (default=H).')
+    parser.add_argument('-e', '--error', default=0.1, help='The error to use for qdrift IQPE (default=0.1).')
     parser.add_argument('-v', '--verbose', action='store_true')
 
     # parse command line args
@@ -162,7 +162,9 @@ if __name__ == '__main__':
                     i,
                     d,
                     algorithm,
-                    opts.first_atom
+                    opts.first_atom,
+                    opts.error
+
                 )
                 i, d, energy, hf_energy = result
                 energies[algorithm][i] = energy
@@ -182,7 +184,8 @@ if __name__ == '__main__':
                                     i,
                                     d,
                                     algorithm,
-                                    opts.first_atom
+                                    opts.first_atom,
+                                    opts.error
                     )
                     futures_to_algorithms[future] = algorithm
             for future in concurrent.futures.as_completed(futures_to_algorithms):
