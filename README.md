@@ -13,11 +13,11 @@ We set a standard rotation angle for all the terms in the Hamiltonian, and then 
 
 This method was reported to be able to reduce the gates required to simulate the time evolution by up to 1000x.
 
-![LiHgates](results/LiH_gates_v_time_jordan_wigner.png) 
+![LiHgates](Results/LiH_gates_v_time_jordan_wigner.png) 
 
 We also saw a massive reduction in the case of LiH but less so for H2 
 
-![LiHgates](results/H2_gates_v_time_jordan_wigner.png) 
+![LiHgates](Results/H2_gates_v_time_jordan_wigner.png) 
 
 We have implemented Iterative Phase Estimation to measure the energy.
 
