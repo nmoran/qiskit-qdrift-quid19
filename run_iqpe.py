@@ -8,15 +8,11 @@ https://github.com/Qiskit/qiskit-community-tutorials/blob/master/chemistry/h2_iq
 """
 import time
 import numpy as np
-import multiprocessing as mp
 import argparse
 import sys
 import logging
-import concurrent.futures
-import multiprocessing as mp
 import os
-import gc
-
+import copy
 
 from qiskit import BasicAer
 from qiskit.aqua import QuantumInstance, AquaError
@@ -30,17 +26,11 @@ from qiskit.chemistry import FermionicOperator
 from qiskit.chemistry.aqua_extensions.components.initial_states import HartreeFock
 from qiskit.chemistry.drivers import PySCFDriver, UnitsType
 from qiskit.chemistry import set_qiskit_chemistry_logging
+from qiskit.aqua.components.initial_states import Custom
 
 from IQPEHack import IQPEHack
 
-def garbage_collected(func):
-    def decorated_func(*args, **kwargs):
-        result = func(*args, **kwargs)
-        _ = gc.collect()
-        return result
-    return decorated_func
-
-def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1):
+def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simulator', error=0.1, runs=20):
     """
     Compute the ground state energy given a distance, method and params
     """
@@ -60,11 +50,13 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
     qubit_op = Z2Symmetries.two_qubit_reduction(to_weighted_pauli_operator(fer_op.mapping(map_type=qubit_mapping, threshold=1e-10)), 2)
     energy_std = 0.0
 
+    exact_eigensolver = ExactEigensolver(qubit_op, k=1)
+    exact_result = exact_eigensolver.run()
+    gs_state = Custom(qubit_op.num_qubits, state_vector=exact_result['eigvecs'][0])
+
     if algorithm.lower() == 'exacteigensolver':
-        exact_eigensolver = ExactEigensolver(qubit_op, k=1)
-        result = exact_eigensolver.run()
-        reference_energy = result['energy']
-        energy = result['energy']
+        reference_energy = exact_result['energy']
+        energy = exact_result['energy']
     elif algorithm.lower() == 'iqpe':
         num_particles = molecule.num_alpha + molecule.num_beta
         two_qubit_reduction = True
@@ -72,9 +64,9 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
 
         num_time_slices = 2
         num_iterations = 8
-        state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
-                               num_particles, qubit_mapping, two_qubit_reduction)
-        iqpe = IQPE(qubit_op, state_in, num_time_slices, num_iterations,
+        #state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
+        #                       num_particles, qubit_mapping, two_qubit_reduction)
+        iqpe = IQPE(qubit_op, gs_state, num_time_slices, num_iterations,
                     expansion_mode='trotter', expansion_order=1,
                     shallow_circuit_concat=True)
         backend = BasicAer.get_backend(sim)
@@ -88,15 +80,17 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         num_orbitals = qubit_op.num_qubits + (2 if two_qubit_reduction else 0)
 
         num_time_slices = 1
-        num_iterations = 5
-        num_runs = 20
+        num_iterations = 8
+        num_runs = runs
         energy_samples = np.empty(num_runs)
         for runs in range(num_runs):
             state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                 num_particles, qubit_mapping, two_qubit_reduction)
-            iqpe = IQPEHack(qubit_op, state_in, num_time_slices, num_iterations,
+
+            qubit_op = Z2Symmetries.two_qubit_reduction(to_weighted_pauli_operator(fer_op.mapping(map_type=qubit_mapping, threshold=1e-10)), 2)
+            iqpe = IQPEHack(qubit_op.copy(), gs_state, num_time_slices, num_iterations,
                             expansion_mode='trotter', expansion_order=1,
-                            shallow_circuit_concat=False, error=error)
+                            shallow_circuit_concat=True, error=error)
             backend = BasicAer.get_backend(sim)
             quantum_instance = QuantumInstance(backend)
             result = iqpe.run(quantum_instance)
@@ -112,7 +106,7 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
         iqft = Standard(qubit_op.num_qubits)
         state_in = HartreeFock(qubit_op.num_qubits, num_orbitals,
                                num_particles, qubit_mapping, two_qubit_reduction)
-        qpe = QPE(qubit_op, state_in, iqft, num_time_slices, num_ancillae=4,
+        qpe = QPE(qubit_op, gs_state, iqft, num_time_slices, num_ancillae=4,
                    expansion_mode='trotter', expansion_order=1,
                    shallow_circuit_concat=True)
         backend = BasicAer.get_backend(sim)
@@ -128,13 +122,15 @@ def compute_energy(i, distance, algorithm, first_atom='H', sim='statevector_simu
 if __name__ == '__main__':
     # Create parser with args to control behaviour
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--processes', type=int, default=1, help='Number of processes to use (default=1)')
     parser.add_argument('-r', '--no-ref', action='store_true', help='Do not calculate reference values using exact eigensolver.')
+    parser.add_argument('-q', '--qpe', action='store_true', help='Also use QPE algorithm.')
     parser.add_argument('-n', '--no-hack', action='store_true', help='Do not attempt to use the modified IQPE.')
     parser.add_argument('-i', '--include-standard-iqpe', action='store_true', help='Include the standard IQPE method.')
     parser.add_argument('-s', '--steps', type=int, default=10, help='Number of distance steps to use between 0.5 and 1.0 (default=10).')
     parser.add_argument('-f', '--first_atom', default='H', help='The first atom (default=H).')
     parser.add_argument('-e', '--error', type=float, default=0.1, help='The error to use for qdrift IQPE (default=0.1).')
+    parser.add_argument('-m', '--runs', type=int, default=20, help='The number of runs to do of stochastic algorithms to gather statistics (default=20).')
+    parser.add_argument('--id', type=str, default='', help='Identifying string to use in output filenames.')
     parser.add_argument('-v', '--verbose', action='store_true')
 
     # parse command line args
@@ -153,6 +149,8 @@ if __name__ == '__main__':
         algorithms.append('exacteigensolver')
     if opts.include_standard_iqpe:
         algorithms.append('iqpe')
+    if opts.qpe:
+        algorithms.append('qpe')
 
     start = 0.5  # Start distance
     by    = 1.0  # How much to increase distance by
@@ -165,54 +163,26 @@ if __name__ == '__main__':
     logging.info(f'Running for algorithms {algorithms} and {steps} steps...')
 
     start_time = time.time()
-    if opts.processes == 1:
-        for j in range(len(algorithms)):
-            algorithm = algorithms[j]
-            energies[algorithm] = np.empty(steps)
-            energy_stds[algorithm] = np.empty(steps)
-            for i in range(steps):
-                d = start + i*by/steps
-                result = compute_energy(
-                    i,
-                    d,
-                    algorithm,
-                    opts.first_atom,
-                    error=opts.error
-                )
-                i, d, energy, hf_energy, energy_error = result
-                energies[algorithm][i] = energy
-                energy_stds[algorithm][i] = energy_error
-                hf_energies[i] = hf_energy
-                distances[i] = d
-    else:
-        max_workers = opts.processes
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures_to_algorithms = {}
-            for j in range(len(algorithms)):
-                algorithm = algorithms[j]
-                energies[algorithm] = np.empty(steps)
-                energy_stds[algorithm] = np.empty(steps)
-                for i in range(steps):
-                    d = start + i*by/steps
-                    future = executor.submit(
-                                    compute_energy,
-                                    i,
-                                    d,
-                                    algorithm,
-                                    opts.first_atom,
-                                    error=opts.error
-                    )
-                    futures_to_algorithms[future] = algorithm
-            logging.info(f'Loaded {len(futures_to_algorithms)} tasks and waiting for completion')
-            for future in concurrent.futures.as_completed([x for x in futures_to_algorithms]):
-                i, d, energy, hf_energy, energy_error = future.result()
-                algorithm = futures_to_algorithms[future]
-                energies[algorithm][i] = energy
-                energy_stds[algorithm][i] = energy_error
-                hf_energies[i] = hf_energy
-                distances[i] = d
-
-    print(' --- complete')
+    for j in range(len(algorithms)):
+        algorithm = algorithms[j]
+        energies[algorithm] = np.empty(steps)
+        energy_stds[algorithm] = np.empty(steps)
+        for i in range(steps):
+            d = start + i*by/steps
+            result = compute_energy(
+                i,
+                d,
+                algorithm,
+                opts.first_atom,
+                error=opts.error,
+                runs=opts.runs
+            )
+            i, d, energy, hf_energy, energy_error = result
+            energies[algorithm][i] = energy
+            energy_stds[algorithm][i] = energy_error
+            hf_energies[i] = hf_energy
+            distances[i] = d
+        print(' --- complete')
 
     print('Distances: ', distances)
     print('Energies:', energies)
@@ -220,7 +190,6 @@ if __name__ == '__main__':
     print('Hartree-Fock energies:', hf_energies)
 
     print("--- %s seconds ---" % (time.time() - start_time))
-
 
     import matplotlib
     matplotlib.use('Agg')
@@ -231,11 +200,15 @@ if __name__ == '__main__':
     plt.xlabel('Interatomic distance')
     plt.ylabel('Energy')
     plt.title(f'{opts.first_atom}-H Ground State Energy')
-    plt.legend(loc='upper right')
-    filename = 'energies_0.png'
-    i = 0
-    while os.path.exists(f'energies_{i}.png'): i += 1
-    plt.savefig(f'energies_{i}.png')
+    if opts.id == '':
+        plt.legend(loc='upper right')
+        filename = 'energies_0.png'
+        i = 0
+        while os.path.exists(f'energies_{i}.png'): i += 1
+        filename = f'energies_{i}.png'
+    else:
+        filename = f'energies_{opts.id}.png'
+    plt.savefig(filename)
 
     # we plot energy difference with reference energy if present
     if 'exacteigensolver' in energies:
@@ -248,7 +221,11 @@ if __name__ == '__main__':
         plt.ylabel('Energy - Energy ref')
         plt.title(f'{opts.first_atom}-H Ground State Energy')
         plt.legend(loc='upper right')
-        filename = 'energy_diffs_0.png'
-        i = 0
-        while os.path.exists(f'energy_diffs_{i}.png'): i += 1
-        plt.savefig(f'energy_diffs_{i}.png')
+        if opts.id == '': 
+            filename = 'energy_diffs_0.png'
+            i = 0
+            while os.path.exists(f'energy_diffs_{i}.png'): i += 1
+            filename = f'energy_diffs_{i}.png'
+        else:
+            filename = f'energy_diffs_{opts.id}.png'
+        plt.savefig(filename)
