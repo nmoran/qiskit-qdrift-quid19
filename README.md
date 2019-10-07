@@ -72,13 +72,15 @@ We also saw a massive reduction in the case of LiH but less so for H2
 
 ![LiHgates](Results/H2_gates_v_time_jordan_wigner.png) 
 
-We have implemented Iterative Phase Estimation to measure the energy.
+We have implemented qdrift in the Iterative Quantum Phase Estimation algorithm to measure the energy. 
 
 ![Energies](Results/H2_energies.png) 
 
-The energies are currently quite far off the reference energies and have a large variance.
-They do trend in the right direction so we believe this could be due to constant factors.
-Further work will be required to resolve this.
+The above plot compares the energy calculated using IQPE with qdrift(orange), IQPE using trotter (red), 
+the energy of the Hartree Fock state (blue) and the exact energy of the ground state (green).
+
+The energies calculated with IQPE using qdrift show greater variance than those calculated using the 
+standard trotter approach. Further work is ongoing to resolve this.
 
 # Possible extensions of this project:
 - Some more work is required to resolve the inaccuracies in the energy and variance issues
